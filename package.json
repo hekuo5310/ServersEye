@@ -1,0 +1,15 @@
+{
+  "name": "serverseye-controller",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/worker.js",
+    "deploy": "npx wrangler deploy",
+    "secret:enroll": "npx wrangler secret put ENROLL_TOKEN",
+    "secret:admin": "npx wrangler secret put ADMIN_TOKEN"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
