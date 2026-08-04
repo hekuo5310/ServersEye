@@ -35,6 +35,15 @@ sudo /opt/serverseye/serverseye-agent.py run
 
 `/install.sh` 从同一个 Worker 拉取 `/agent.py`，这个文件中的主控地址已自动写成 Worker 实际域名。在支持 systemd 的 Linux 上，脚本会自动创建并启动 `serverseye.service`。
 
+仓库也提供独立安装脚本，适合先下载到被控服务器后再执行：
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/hekuo5310/ServersEye/main/install-agent.sh
+sh install-agent.sh --controller <worker-url> --token '你的 ENROLL_TOKEN' --name '服务器名称'
+```
+
+独立脚本同样从指定 Worker 的 `/agent.py` 拉取被控端，不会把注册令牌写进下载地址或仓库。
+
 ## 查看所有服务器
 
 ```sh
