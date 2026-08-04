@@ -1,6 +1,6 @@
 # ServersEye
 
-运行在 Cloudflare Workers 上的轻量服务器探针主控，配套无第三方依赖的 Python 3 被控端。被控端由 Worker 直接生成并下载，因此主控地址会自动预设为当前 Worker 域名。
+运行在 Cloudflare Workers 上的轻量服务器探针主控，配套无语言运行时依赖的 POSIX `sh` 被控端。被控端由 Worker 直接生成并下载，因此主控地址会自动预设为当前 Worker 域名。
 
 ## 功能
 
@@ -25,15 +25,15 @@
 
 ## 安装被控端
 
-目标服务器需要 Python 3 和 `curl`。把 `<worker-url>` 替换为部署后的地址：
+目标服务器需要 Linux 自带的 `sh`、`/proc`、`curl` 和 `sudo`。把 `<worker-url>` 替换为部署后的地址：
 
 ```sh
 export SERVERSEYE_ENROLL_TOKEN='你的 ENROLL_TOKEN'
 curl -fsSL <worker-url>/install.sh | sh
-sudo /opt/serverseye/serverseye-agent.py run
+sudo /opt/serverseye/serverseye-agent.sh run
 ```
 
-`/install.sh` 从同一个 Worker 拉取 `/agent.py`，这个文件中的主控地址已自动写成 Worker 实际域名。在支持 systemd 的 Linux 上，脚本会自动创建并启动 `serverseye.service`。
+`/install.sh` 从同一个 Worker 拉取 `/agent.sh`，这个文件中的主控地址已自动写成 Worker 实际域名。在支持 systemd 的 Linux 上，脚本会自动创建并启动 `serverseye.service`。
 
 仓库也提供独立安装脚本，适合先下载到被控服务器后再执行：
 
@@ -42,7 +42,7 @@ curl -fsSLO https://raw.githubusercontent.com/hekuo5310/ServersEye/main/install-
 sh install-agent.sh --controller <worker-url> --token '你的 ENROLL_TOKEN' --name '服务器名称'
 ```
 
-独立脚本同样从指定 Worker 的 `/agent.py` 拉取被控端，不会把注册令牌写进下载地址或仓库。
+独立脚本同样从指定 Worker 的 `/agent.sh` 拉取被控端，不会把注册令牌写进下载地址或仓库。
 
 ## 查看所有服务器
 
