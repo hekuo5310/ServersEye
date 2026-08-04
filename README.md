@@ -1,4 +1,4 @@
-# ServerEye
+# ServersEye
 
 运行在 Cloudflare Workers 上的轻量服务器探针主控，配套无第三方依赖的 Python 3 被控端。被控端由 Worker 直接生成并下载，因此主控地址会自动预设为当前 Worker 域名。
 
@@ -28,12 +28,12 @@
 目标服务器需要 Python 3 和 `curl`。把 `<worker-url>` 替换为部署后的地址：
 
 ```sh
-export SERVEREYE_ENROLL_TOKEN='你的 ENROLL_TOKEN'
+export SERVERSEYE_ENROLL_TOKEN='你的 ENROLL_TOKEN'
 curl -fsSL <worker-url>/install.sh | sh
-sudo /opt/servereye/servereye-agent.py run
+sudo /opt/serverseye/serverseye-agent.py run
 ```
 
-`/install.sh` 从同一个 Worker 拉取 `/agent.py`，这个文件中的主控地址已自动写成 Worker 实际域名。在支持 systemd 的 Linux 上，脚本会自动创建并启动 `servereye.service`。
+`/install.sh` 从同一个 Worker 拉取 `/agent.py`，这个文件中的主控地址已自动写成 Worker 实际域名。在支持 systemd 的 Linux 上，脚本会自动创建并启动 `serverseye.service`。
 
 ## 查看所有服务器
 
