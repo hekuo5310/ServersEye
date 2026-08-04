@@ -33,16 +33,16 @@ case "$controller" in
 esac
 [ -n "$enroll_token" ] || { echo "请通过 --token 或 SERVERSEYE_ENROLL_TOKEN 提供注册令牌" >&2; exit 2; }
 
-for command in curl python3 sudo; do
+for command in curl sudo; do
   command -v "$command" >/dev/null 2>&1 || { echo "缺少命令：$command" >&2; exit 1; }
 done
 
 controller="${controller%/}"
-agent_path="$install_dir/serverseye-agent.py"
+agent_path="$install_dir/serverseye-agent.sh"
 service_name="serverseye.service"
 
 sudo mkdir -p "$install_dir" /etc/serverseye
-curl --fail --show-error --silent --location "$controller/agent.py" | sudo tee "$agent_path" >/dev/null
+curl --fail --show-error --silent --location "$controller/agent.sh" | sudo tee "$agent_path" >/dev/null
 sudo chmod 755 "$agent_path"
 
 if [ -n "$agent_name" ]; then
