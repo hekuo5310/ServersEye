@@ -61,6 +61,100 @@ function statusAgent(agent) {
   };
 }
 
+function compatibilityId(agent) {
+  return Number.parseInt(agent.id.slice(0, 12), 16);
+}
+
+function nezhaServer(agent) {
+  const metrics = agent.metrics || {};
+  const disk = metrics.disk || {};
+  const memory = metrics.memory || {};
+  const network = metrics.network || {};
+  const load = metrics.load_average || [];
+  const uptime = Number(metrics.uptime_seconds || 0);
+  const lastActive = agent.updated_at ? Math.floor(agent.updated_at / 1000) : -62135596800;
+  return {
+    id: compatibilityId(agent),
+    name: agent.name,
+    tag: "ServersEye",
+    last_active: lastActive,
+    ipv4: "",
+    ipv6: "",
+    valid_ip: "",
+    host: {
+      Platform: "",
+      PlatformVersion: "",
+      CPU: [],
+      MemTotal: Number(memory.total || 0),
+      DiskTotal: Number(disk.total || 0),
+      SwapTotal: 0,
+      Arch: "",
+      Virtualization: "",
+      BootTime: uptime && agent.updated_at ? Math.max(0, lastActive - Math.floor(uptime)) : 0,
+      CountryCode: "",
+      Version: "ServersEye",
+    },
+    status: {
+      CPU: Number(metrics.cpu_percent || 0),
+      MemUsed: Number(memory.used || 0),
+      SwapUsed: 0,
+      DiskUsed: Number(disk.used || 0),
+      NetInTransfer: Number(network.rx || 0),
+      NetOutTransfer: Number(network.tx || 0),
+      NetInSpeed: 0,
+      NetOutSpeed: 0,
+      Uptime: uptime,
+      Load1: Number(load[0] || 0),
+      Load5: Number(load[1] || 0),
+      Load15: Number(load[2] || 0),
+      TcpConnCount: 0,
+      UdpConnCount: 0,
+      ProcessCount: 0,
+    },
+  };
+}
+
+function komariNode(agent) {
+  const metrics = agent.metrics || {};
+  const disk = metrics.disk || {};
+  const memory = metrics.memory || {};
+  return {
+    uuid: agent.id,
+    token: "",
+    name: agent.name,
+    cpu_name: "",
+    virtualization: "",
+    arch: "",
+    cpu_cores: 0,
+    cpu_physical_cores: 0,
+    os: "",
+    kernel_version: "",
+    gpu_name: "",
+    ipv4: "",
+    ipv6: "",
+    region: "",
+    remark: "",
+    public_remark: "",
+    mem_total: Number(memory.total || 0),
+    swap_total: 0,
+    disk_total: Number(disk.total || 0),
+    version: "ServersEye",
+    weight: 0,
+    price: 0,
+    billing_cycle: 0,
+    auto_renewal: false,
+    currency: "$",
+    expired_at: null,
+    group: "ServersEye",
+    tags: "",
+    hidden: false,
+    traffic_limit: 0,
+    traffic_limit_type: "max",
+    created_at: new Date(agent.created_at || 0).toISOString(),
+    updated_at: new Date(agent.updated_at || agent.created_at || 0).toISOString(),
+  };
+}
+
 function clientSource(controllerUrl) {
   // POSIX sh is supplied by standard Linux systems; no Python or third-party runtime is required.
   return `#!/bin/sh
@@ -116,13 +210,14 @@ metrics() {
   platform="$(uname -srm 2>/dev/null || printf unknown)"
   uptime="$(awk '{print $1}' /proc/uptime 2>/dev/null || printf 0)"
   load="$(awk '{print $1 "," $2 "," $3}' /proc/loadavg 2>/dev/null || printf '0,0,0')"
-  memory="$(awk '/MemTotal:/ {t=$2} /MemAvailable:/ {a=$2} END {if (t) print int((t-a)*100/t); else print 0}' /proc/meminfo 2>/dev/null)"
+  set -- $(awk '/MemTotal:/ {t=$2} /MemAvailable:/ {a=$2} END {if (t) {u=t-a; print t*1024, u*1024, int(u*100/t)} else print 0, 0, 0}' /proc/meminfo 2>/dev/null)
+  memory_total="\${1:-0}"; memory_used="\${2:-0}"; memory_percent="\${3:-0}"
   set -- $(df -Pk / | awk 'NR==2 {print $2*1024, $3*1024, $4*1024}')
   disk_total="\${1:-0}"; disk_used="\${2:-0}"; disk_free="\${3:-0}"
   set -- $(awk -F: 'NR>2 {n=$1; gsub(/^[[:space:]]+|[[:space:]]+$/, "", n); if (n != "lo") {gsub(/^[[:space:]]+/, "", $2); split($2, a, /[[:space:]]+/); rx+=a[1]; tx+=a[9]}} END {print rx+0, tx+0}' /proc/net/dev 2>/dev/null)
   rx="\${1:-0}"; tx="\${2:-0}"
-  printf '{"hostname":"%s","platform":"%s","uptime_seconds":%s,"load_average":[%s],"cpu_percent":%s,"memory_percent":%s,"disk":{"total":%s,"used":%s,"free":%s},"network":{"rx":%s,"tx":%s},"timestamp":%s}' \
-    "$(json_escape "$hostname")" "$(json_escape "$platform")" "$uptime" "$load" "$(cpu_percent)" "$memory" "$disk_total" "$disk_used" "$disk_free" "$rx" "$tx" "$(date +%s)"
+  printf '{"hostname":"%s","platform":"%s","uptime_seconds":%s,"load_average":[%s],"cpu_percent":%s,"memory_percent":%s,"memory":{"total":%s,"used":%s},"disk":{"total":%s,"used":%s,"free":%s},"network":{"rx":%s,"tx":%s},"timestamp":%s}' \
+    "$(json_escape "$hostname")" "$(json_escape "$platform")" "$uptime" "$load" "$(cpu_percent)" "$memory_percent" "$memory_total" "$memory_used" "$disk_total" "$disk_used" "$disk_free" "$rx" "$tx" "$(date +%s)"
 }
 
 register() {
@@ -219,6 +314,28 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/status") {
       const { agents } = await listAgents(env);
       return json({ agents: agents.map(statusAgent) });
+    }
+
+    // Public compatibility endpoints. Existing ServersEye APIs above and below remain unchanged.
+    if (request.method === "GET" && url.pathname === "/api/nodes") {
+      const { agents } = await listAgents(env);
+      return json(agents.map(komariNode));
+    }
+    if (request.method === "GET" && url.pathname === "/api/public") {
+      return json({ site_name: "ServersEye", site_description: "ServersEye public server status", private_site: false });
+    }
+    if (request.method === "GET" && url.pathname === "/api/version") {
+      return json({ version: "serverseye-compat-1", hash: "" });
+    }
+    if (request.method === "GET" && (url.pathname === "/api/v1/server/list" || url.pathname === "/api/v1/server/details")) {
+      const { agents } = await listAgents(env);
+      const tag = url.searchParams.get("tag");
+      let servers = tag && tag !== "ServersEye" ? [] : agents.map(nezhaServer);
+      if (url.pathname.endsWith("/details") && url.searchParams.get("id")) {
+        const requested = new Set(url.searchParams.get("id").split(",").map(Number));
+        servers = servers.filter((server) => requested.has(server.id));
+      }
+      return json({ code: 0, message: "success", result: servers });
     }
 
     if (request.method === "POST" && url.pathname === "/api/agents/register") {
