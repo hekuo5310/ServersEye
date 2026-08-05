@@ -62,6 +62,17 @@ curl -H 'Authorization: Bearer 你的 ADMIN_TOKEN' <worker-url>/api/agents
 - `/`：公开状态页，展示服务器名称、在线状态、CPU、内存、磁盘与运行时长；不会公开主机名、系统信息或令牌。
 - `/admin`：管理后台。输入 `ADMIN_TOKEN` 后可查看完整指标并删除已失效的被控端。令牌仅保存在当前浏览器标签页。
 
+## 公开兼容接口
+
+原生接口继续保留；以下路径为公开、只读兼容层，不需要令牌，也不会公开 IP 或被控端令牌：
+
+| 兼容对象 | 接口 |
+| --- | --- |
+| Komari | `GET /api/nodes`、`GET /api/public`、`GET /api/version` |
+| 哪吒监控 v0 | `GET /api/v1/server/list?tag=`、`GET /api/v1/server/details?id=&tag=` |
+
+哪吒接口中的服务器 `id` 是由 ServersEye 节点 ID 稳定换算出的数值；`tag` 固定为 `ServersEye`。尚未采集的字段会按对应面板 API 的空值或 `0` 返回。
+
 ## 本地检查
 
 ```sh
