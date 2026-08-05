@@ -6,8 +6,8 @@ compatibility_date = "2026-08-04"
 [[d1_databases]]
 binding = "DB"
 database_name = "serverseye"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "86a6b121-f5d8-4009-960e-5e47d5c28e56"
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "d4a87a9c30194f7d997e12393214a460"
