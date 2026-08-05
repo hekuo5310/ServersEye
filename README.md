@@ -6,7 +6,7 @@
 
 ## 功能
 
-- Worker + KV 保存服务器状态，无需独立主控服务器。
+- Worker + D1 保存服务器状态，KV 仅缓存服务器列表 30 秒，无需独立主控服务器。
 - 注册采用一次性部署时设置的 `ENROLL_TOKEN`；每台被控端再获得独立令牌，Worker 只保存其 SHA-256 哈希。
 - 上报主机名、系统、负载、CPU、内存、磁盘、网络收发和运行时长。
 - 管理接口由独立 `ADMIN_TOKEN` 保护。
@@ -14,8 +14,8 @@
 ## 部署主控
 
 1. 安装依赖：`npm install`
-2. 创建 KV：`npx wrangler kv namespace create SERVER_EYE`
-3. 把输出的 namespace id 填入 `wrangler.toml`。
+2. 创建 D1：`npx wrangler d1 create serverseye`；创建 KV 缓存：`npx wrangler kv namespace create CACHE`。
+3. 把输出的 D1 `database_id` 和 KV namespace id 填入 `wrangler.toml`。
 4. 设置两个高强度随机密钥：
 
    ```sh
@@ -23,7 +23,9 @@
    npm run secret:admin
    ```
 
-5. 部署：`npm run deploy`
+5. 部署：`npm run deploy`。该命令会先执行 `migrations/` 中的 D1 数据库迁移，再部署 Worker。
+
+通过 README 顶部的一键部署按钮时，Cloudflare 会根据 `wrangler.toml` 自动创建并绑定 D1 与 KV；D1 迁移由部署脚本执行。
 
 ## 安装被控端
 
