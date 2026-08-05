@@ -2,8 +2,12 @@ name = "serverseye"
 main = "src/worker.js"
 compatibility_date = "2026-08-04"
 
-# Create a KV namespace, then replace this placeholder with its id:
-#   npx wrangler kv namespace create SERVER_EYE
+# D1 is the source of truth. KV only caches the management list for 30 seconds.
+[[d1_databases]]
+binding = "DB"
+database_name = "serverseye"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
 [[kv_namespaces]]
-binding = "SERVER_EYE"
+binding = "CACHE"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
