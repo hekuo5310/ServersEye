@@ -1,7 +1,11 @@
+import { dashboardHtml } from "./dashboard.js";
+
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
 });
+
+const html = (content) => new Response(content, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 
 function bearer(request) {
   const value = request.headers.get("authorization") || "";
@@ -35,6 +39,26 @@ function publicAgent(record) {
 
 async function invalidateAgentsCache(env) {
   await env.CACHE.delete(AGENTS_CACHE_KEY);
+}
+
+async function listAgents(env) {
+  const cached = await env.CACHE.get(AGENTS_CACHE_KEY, "json");
+  if (cached) return cached;
+  const { results = [] } = await env.DB.prepare("SELECT id, name, created_at, updated_at, metrics_json FROM agents ORDER BY created_at DESC").all();
+  const payload = { agents: results.map(publicAgent) };
+  await env.CACHE.put(AGENTS_CACHE_KEY, JSON.stringify(payload), { expirationTtl: 30 });
+  return payload;
+}
+
+function statusAgent(agent) {
+  const metrics = agent.metrics || {};
+  const { hostname, platform, python, timestamp, ...publicMetrics } = metrics;
+  return {
+    name: agent.name,
+    online: Boolean(agent.updated_at && Date.now() - agent.updated_at < 90_000),
+    last_seen_at: agent.updated_at,
+    metrics: publicMetrics,
+  };
 }
 
 function clientSource(controllerUrl) {
@@ -187,9 +211,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const controllerUrl = url.origin;
-    if (request.method === "GET" && url.pathname === "/") return json({ name: "ServersEye", status: "ok", install: "/install.sh" });
+    if (request.method === "GET" && url.pathname === "/") return html(dashboardHtml());
+    if (request.method === "GET" && url.pathname === "/admin") return html(dashboardHtml({ admin: true }));
     if (request.method === "GET" && url.pathname === "/agent.sh") return new Response(clientSource(controllerUrl), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
     if (request.method === "GET" && url.pathname === "/install.sh") return new Response(installScript(controllerUrl), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+
+    if (request.method === "GET" && url.pathname === "/api/status") {
+      const { agents } = await listAgents(env);
+      return json({ agents: agents.map(statusAgent) });
+    }
 
     if (request.method === "POST" && url.pathname === "/api/agents/register") {
       if (!authorized(request, env.ENROLL_TOKEN)) return json({ error: "invalid enrollment token" }, 401);
@@ -218,12 +248,15 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/api/agents") {
       if (!authorized(request, env.ADMIN_TOKEN)) return json({ error: "invalid admin token" }, 401);
-      const cached = await env.CACHE.get(AGENTS_CACHE_KEY, "json");
-      if (cached) return json(cached);
-      const { results = [] } = await env.DB.prepare("SELECT id, name, created_at, updated_at, metrics_json FROM agents ORDER BY created_at DESC").all();
-      const payload = { agents: results.map(publicAgent) };
-      await env.CACHE.put(AGENTS_CACHE_KEY, JSON.stringify(payload), { expirationTtl: 30 });
-      return json(payload);
+      return json(await listAgents(env));
+    }
+
+    const deleteAgent = url.pathname.match(/^\/api\/agents\/([a-f0-9]{32})$/);
+    if (request.method === "DELETE" && deleteAgent) {
+      if (!authorized(request, env.ADMIN_TOKEN)) return json({ error: "invalid admin token" }, 401);
+      await env.DB.prepare("DELETE FROM agents WHERE id = ?").bind(deleteAgent[1]).run();
+      await invalidateAgentsCache(env);
+      return json({ ok: true });
     }
     return json({ error: "not found" }, 404);
   },
