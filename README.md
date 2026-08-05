@@ -1,5 +1,7 @@
 # ServersEye
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2Fhekuo5310%2FServersEye)
+
 运行在 Cloudflare Workers 上的轻量服务器探针主控，配套无语言运行时依赖的 POSIX `sh` 被控端。被控端由 Worker 直接生成并下载，因此主控地址会自动预设为当前 Worker 域名。
 
 ## 功能
