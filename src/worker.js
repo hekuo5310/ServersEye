@@ -12,7 +12,7 @@ function authorized(request, secret) {
   return Boolean(secret) && bearer(request) === secret;
 }
 
-function agentKey(id) { return `agent:${id}`; }
+const AGENTS_CACHE_KEY = "agents:list:v1";
 
 async function sha256(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -20,6 +20,22 @@ async function sha256(value) {
 }
 
 function randomId() { return crypto.randomUUID().replaceAll("-", ""); }
+
+function publicAgent(record) {
+  let metrics = null;
+  try { metrics = record.metrics_json ? JSON.parse(record.metrics_json) : null; } catch { /* Ignore malformed historical metrics. */ }
+  return {
+    id: record.id,
+    name: record.name,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+    metrics,
+  };
+}
+
+async function invalidateAgentsCache(env) {
+  await env.CACHE.delete(AGENTS_CACHE_KEY);
+}
 
 function clientSource(controllerUrl) {
   // POSIX sh is supplied by standard Linux systems; no Python or third-party runtime is required.
@@ -179,31 +195,35 @@ export default {
       if (!authorized(request, env.ENROLL_TOKEN)) return json({ error: "invalid enrollment token" }, 401);
       const body = await request.json().catch(() => ({}));
       const id = randomId(); const token = randomId() + randomId();
-      const record = { id, name: String(body.name || "unnamed").slice(0, 128), token_hash: await sha256(token), created_at: Date.now(), updated_at: null, metrics: null };
-      await env.SERVER_EYE.put(agentKey(id), JSON.stringify(record));
+      const record = { id, name: String(body.name || "unnamed").slice(0, 128), token_hash: await sha256(token), created_at: Date.now() };
+      await env.DB.prepare("INSERT INTO agents (id, name, token_hash, created_at) VALUES (?, ?, ?, ?)")
+        .bind(record.id, record.name, record.token_hash, record.created_at).run();
+      await invalidateAgentsCache(env);
       return json({ id, token }, 201);
     }
 
     const heartbeat = url.pathname.match(/^\/api\/agents\/([a-f0-9]{32})\/heartbeat$/);
     if (request.method === "POST" && heartbeat) {
-      const key = agentKey(heartbeat[1]); const raw = await env.SERVER_EYE.get(key);
-      if (!raw) return json({ error: "agent not found" }, 404);
-      const record = JSON.parse(raw);
+      const id = heartbeat[1];
+      const record = await env.DB.prepare("SELECT token_hash FROM agents WHERE id = ?").bind(id).first();
+      if (!record) return json({ error: "agent not found" }, 404);
       if (await sha256(bearer(request)) !== record.token_hash) return json({ error: "invalid agent token" }, 401);
       const metrics = await request.json().catch(() => null);
       if (!metrics || typeof metrics !== "object") return json({ error: "invalid metrics" }, 400);
-      record.metrics = metrics; record.updated_at = Date.now();
-      await env.SERVER_EYE.put(key, JSON.stringify(record));
+      await env.DB.prepare("UPDATE agents SET updated_at = ?, metrics_json = ? WHERE id = ?")
+        .bind(Date.now(), JSON.stringify(metrics), id).run();
+      await invalidateAgentsCache(env);
       return json({ ok: true });
     }
 
     if (request.method === "GET" && url.pathname === "/api/agents") {
       if (!authorized(request, env.ADMIN_TOKEN)) return json({ error: "invalid admin token" }, 401);
-      const listed = await env.SERVER_EYE.list({ prefix: "agent:" });
-      const agents = await Promise.all(listed.keys.map(async ({ name }) => {
-        const record = JSON.parse(await env.SERVER_EYE.get(name)); delete record.token_hash; return record;
-      }));
-      return json({ agents });
+      const cached = await env.CACHE.get(AGENTS_CACHE_KEY, "json");
+      if (cached) return json(cached);
+      const { results = [] } = await env.DB.prepare("SELECT id, name, created_at, updated_at, metrics_json FROM agents ORDER BY created_at DESC").all();
+      const payload = { agents: results.map(publicAgent) };
+      await env.CACHE.put(AGENTS_CACHE_KEY, JSON.stringify(payload), { expirationTtl: 30 });
+      return json(payload);
     }
     return json({ error: "not found" }, 404);
   },
